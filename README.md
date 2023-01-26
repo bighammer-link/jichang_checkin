@@ -4,7 +4,7 @@
 
 
 ## 推送方式
-  🚀🚀该脚本采用的是server酱的推送方式
+  🚀🚀该脚本采用的是<a href = 'https://sct.ftqq.com/'>server</a>酱的推送方式，如果不需要推送，就忽略下面的SCKEY参数
 
 # 部署过程
  
