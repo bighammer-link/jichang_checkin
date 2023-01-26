@@ -19,6 +19,6 @@
 | SCKEY  | 否  | Sever酱秘钥  |
 <br/>
 <b>其中URL的值必须是机场网站的地址，例如：https://example.com</b>,尾部不要加''' / '''号
-<br/>
-3. 到`Actions`中创建一个workflow，运行一次，以后每天项目都会自动运行。
+
+3. 到`Actions`中创建一个workflow，运行一次，以后每天项目都会自动运行。<br/>
 4. 最后，可以到Run sign查看签到情况，同时也会也会将签到详情推送到Sever酱。
