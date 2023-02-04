@@ -5,7 +5,7 @@
 >每天进行签到，获取额外的流量奖励
 
 ## 推送方式
-  🚀🚀该脚本采用的是<a href = 'https://sct.ftqq.com/'>Server酱</a>的推送方式，如果不需要推送，就忽略下面的SCKEY参数
+  🚀🚀该脚本采用的是<a href = 'https://sct.ftqq.com/'>Server酱</a>的推送方式，如果不需要推送，就下面的SCKEY参数的值设置为<b>空</b>就行
 
 # 部署过程
  
