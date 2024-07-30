@@ -24,6 +24,7 @@ def sign(order,user,pwd):
         }
         try:
                 print(f'===账号{order}进行登录...===')
+                print(f'账号：{user}')
                 response = json.loads(session.post(url=login_url,headers=header,data=data).text)
                 print(response['msg'])
                 # 进行签到
@@ -45,15 +46,13 @@ def sign(order,user,pwd):
         print('===账号{order}签到结束===\n'.format(order=order))
 if __name__ == '__main__':
         configs = config.splitlines()
-        if len(configs) %2 == 0 or len(configs) == 0:
+        if len(configs) %2 != 0 or len(configs) == 0:
                 print('配置文件格式错误')
                 exit()
-        user_quantity = len(configs)+1
+        user_quantity = len(configs)
         user_quantity = user_quantity // 2
         for i in range(user_quantity):
-                t = i*2
-                t -= 1
-                user = configs[t]
-                pwd = configs[i*2]
+                user = configs[i*2]
+                pwd = configs[i*2+1]
                 sign(i,user,pwd)
         
