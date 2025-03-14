@@ -22,3 +22,4 @@
 
 3. 到`Actions`中创建一个workflow，运行一次，以后每天项目都会自动运行。<br/>
 4. 最后，可以到Run sign查看签到情况，同时也会也会将签到详情推送到Sever酱。
+![image](https://github.com/user-attachments/assets/d75c2bb8-2e4d-46ac-b43f-86905d314fec)
