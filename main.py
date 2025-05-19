@@ -1,6 +1,4 @@
 import requests, json, re, os
-
-session = requests.session()
 # 机场的地址
 url = os.environ.get('URL')
 # 配置用户名（一般是邮箱）
@@ -13,6 +11,7 @@ login_url = '{}/auth/login'.format(url)
 check_url = '{}/user/checkin'.format(url)
 
 def sign(order,user,pwd):
+        session = requests.session()
         global url,SEKEY
         header = {
         'origin': url,
