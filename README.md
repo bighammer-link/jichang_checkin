@@ -15,9 +15,11 @@
 | 参数   | 是否必须  | 内容  | 
 | ------------ | ------------ | ------------ |
 | CONFIG| 是  | 账号密码  |
+| URL      | 是  |     链接     |
 | SCKEY  | 否  | Sever酱秘钥  |
 <br/>
 <b>其中URL的值必须是机场网站的地址，例如：https://example.com</b>,尾部不要加''' / '''号 config写法：一行账号一行密码
 
 3. 到`Actions`中创建一个workflow，运行一次，以后每天项目都会自动运行。<br/>
 4. 最后，可以到Run sign查看签到情况，同时也会也会将签到详情推送到Sever酱。
+![image](https://github.com/user-attachments/assets/d75c2bb8-2e4d-46ac-b43f-86905d314fec)
