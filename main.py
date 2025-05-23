@@ -1,6 +1,4 @@
 import requests, json, re, os
-
-session = requests.session()
 # 机场的地址
 url = os.environ.get('URL')
 # 配置用户名（一般是邮箱）
@@ -13,6 +11,7 @@ login_url = '{}/auth/login'.format(url)
 check_url = '{}/user/checkin'.format(url)
 
 def sign(order,user,pwd):
+        session = requests.session()
         global url,SEKEY
         header = {
         'origin': url,
@@ -25,10 +24,14 @@ def sign(order,user,pwd):
         try:
                 print(f'===账号{order}进行登录...===')
                 print(f'账号：{user}')
-                response = json.loads(session.post(url=login_url,headers=header,data=data).text)
+                res = session.post(url=login_url,headers=header,data=data).text
+                print(res)
+                response = json.loads(res)
                 print(response['msg'])
                 # 进行签到
-                result = json.loads(session.post(url=check_url,headers=header).text)
+                res2 = session.post(url=check_url,headers=header).text
+                print(res2)
+                result = json.loads(res2)
                 print(result['msg'])
                 content = result['msg']
                 # 进行推送
@@ -36,9 +39,10 @@ def sign(order,user,pwd):
                         push_url = 'https://sctapi.ftqq.com/{}.send?title=机场签到&desp={}'.format(SCKEY, content)
                         requests.post(url=push_url)
                         print('推送成功')
-        except:
+        except Exception as ex:
                 content = '签到失败'
                 print(content)
+                print("出现如下异常%s"%ex)
                 if SCKEY != '':
                         push_url = 'https://sctapi.ftqq.com/{}.send?title=机场签到&desp={}'.format(SCKEY, content)
                         requests.post(url=push_url)
