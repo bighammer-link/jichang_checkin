@@ -2,7 +2,7 @@ name: "Common airport Checkin"
 
 on:
   schedule:
-    - cron: "0 14 * * *"  # scheduled at 06:00 (UTC+8) everyday
+    - cron: "0 22 * * *"  # scheduled at 06:00 (UTC+8) everyday
   workflow_dispatch:
 
 env:
@@ -23,7 +23,7 @@ jobs:
       - name: Set up python
         uses: actions/setup-python@v5
         with:
-          python-version: 3.10.16
+          python-version: 3.10.6
 
       - name: Random sleep
         if: github.event_name == 'schedule'
@@ -37,8 +37,6 @@ jobs:
         env:
           URL: ${{ secrets.URL }}
           SCKEY: ${{ secrets.SCKEY }}
-          EMAIL: ${{ secrets.EMAIL }}
-          PASSWD: ${{ secrets.PASSWD }}
           CONFIG: ${{ secrets.CONFIG }}
         run: |
           python3 ./main.py

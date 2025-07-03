@@ -1,4 +1,4 @@
-import requests, json, re, os
+import requests, json, os
 # 机场的地址
 url = os.environ.get('URL')
 # 配置用户名（一般是邮箱）
@@ -6,6 +6,7 @@ url = os.environ.get('URL')
 config = os.environ.get('CONFIG')
 # server酱
 SCKEY = os.environ.get('SCKEY')
+
 
 login_url = '{}/auth/login'.format(url)
 check_url = '{}/user/checkin'.format(url)
@@ -22,41 +23,48 @@ def sign(order,user,pwd):
         'passwd': pwd
         }
         try:
-                print(f'===账号{order}进行登录...===')
-                print(f'账号：{user}')
+                print(f'[info]签到 第{order}个账号')
+                # 尝试脱敏输出账号，避免被github actions替换成***
+                user_out = ''
+                for i in user:
+                        user_out += i
+                        user_out += " "
+                print(f'[info]账号：{user_out}')
                 res = session.post(url=login_url,headers=header,data=data).text
-                print(res)
+                print('[debug]登录接口返回',res)
                 response = json.loads(res)
-                print(response['msg'])
+                print(f'[info]第{order}个账号',response['msg'])
                 # 进行签到
                 res2 = session.post(url=check_url,headers=header).text
-                print(res2)
+                print('[debug]签到接口返回',res2)
                 result = json.loads(res2)
-                print(result['msg'])
-                content = result['msg']
-                # 进行推送
-                if SCKEY != '':
-                        push_url = 'https://sctapi.ftqq.com/{}.send?title=机场签到&desp={}'.format(SCKEY, content)
-                        requests.post(url=push_url)
-                        print('推送成功')
+                print(f"[info]第{order}个账号",result['msg'])
+                return f"[账号{user}]签到成功：{result['msg']}"
         except Exception as ex:
-                content = '签到失败'
-                print(content)
-                print("出现如下异常%s"%ex)
-                if SCKEY != '':
-                        push_url = 'https://sctapi.ftqq.com/{}.send?title=机场签到&desp={}'.format(SCKEY, content)
-                        requests.post(url=push_url)
-                        print('推送成功')
-        print('===账号{order}签到结束===\n'.format(order=order))
+                print('[error]第{order}个账号签到失败')
+                print("[error]签到时出现如下异常%s" % ex)
+                return f"[账号{user}]签到失败:{ex}"
+                
+def push(msg):
+        if SCKEY != '':
+                push_url = 'https://sctapi.ftqq.com/{}.send?title=机场签到&desp={}'.format(SCKEY, msg)
+                requests.post(url=push_url)
+                print('[info]已推送至 server酱')
+        else:
+                print('[info]未配置 Server酱，跳过推送流程')
+
 if __name__ == '__main__':
         configs = config.splitlines()
+        pushmsg = 'SSPANEL 机场签到结果推送：'
         if len(configs) %2 != 0 or len(configs) == 0:
-                print('配置文件格式错误')
+                print('[warn]机密CONFIG格式错误，参考README.md进行修改\n[exit]退出签到')
                 exit()
         user_quantity = len(configs)
         user_quantity = user_quantity // 2
         for i in range(user_quantity):
                 user = configs[i*2]
                 pwd = configs[i*2+1]
-                sign(i,user,pwd)
-        
+                pushmsg += '\n' + sign(i+1,user,pwd)
+        push(pushmsg)
+        print('[exit]流程结束')
+        exit()
