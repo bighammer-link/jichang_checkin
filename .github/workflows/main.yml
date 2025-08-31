@@ -33,6 +33,14 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+
+      - name: Setup Cloudflare Warp
+        uses: Boostport/setup-cloudflare-warp@v1.15.0
+        with:
+          organization: ${{ secrets.CLOUDFLARE_ORG }}
+          auth_client_id: ${{ secrets.CLOUDFLARE_AUTH_CLIENT_ID }}
+          auth_client_secret: ${{ secrets.CLOUDFLARE_AUTH_CLIENT_SECRET }}
+
       - name: Run sign
         env:
           URL: ${{ secrets.URL }}
