@@ -2,43 +2,59 @@ name: "Common airport Checkin"
 
 on:
   schedule:
-    - cron: "0 14 * * *"  # scheduled at 06:00 (UTC+8) everyday
+    - cron: "0 14 * * *"  # 每天 UTC 14:00 → 北京时间 22:00（视夏令时可能有1小时偏移）
   workflow_dispatch:
 
 env:
   RUN_ENV: 'prod'
 
 jobs:
-  build:
+  checkin:
     runs-on: ubuntu-latest
-    # if: github.ref == 'refs/heads/master'
 
     steps:
-      - name: Checkout master
-        uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
-          # ref: master
+      - name: Checkout code
+        uses: actions/checkout@v4  # 建议升级到 v4，更稳定
 
-      - name: Set up python
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: 3.10.16
+          python-version: '3.10'
 
-      - name: Random sleep
+      - name: Random sleep (anti-ban on schedule)
         if: github.event_name == 'schedule'
-        run: sleep $(shuf -i 10-300 -n 1)
+        run: sleep $(shuf -i 30-480 -n 1)   # 30秒～8分钟随机延迟，更自然
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-      - name: Run sign
+          pip install requests   # 如果 requirements.txt 只用到 requests，可直接装
+          # 如果有 requirements.txt 且内容较多，保留下面这行
+          # pip install -r requirements.txt
+
+      - name: Run airport check-in script
         env:
-          URL: ${{ secrets.URL }}
-          SCKEY: ${{ secrets.SCKEY }}
-          EMAIL: ${{ secrets.EMAIL }}
-          PASSWD: ${{ secrets.PASSWD }}
-          CONFIG: ${{ secrets.CONFIG }}
-        run: |
-          python3 ./main.py
+          # 机场相关（至少需要 URL 和 CONFIG 之一）
+          URL:     ${{ secrets.URL }}
+          CONFIG:  ${{ secrets.CONFIG }}     # 多账号首选方式（推荐）
+
+          # 单账号兼容（可选，如果没用 CONFIG 可以 fallback）
+          EMAIL:   ${{ secrets.EMAIL }}
+          PASSWD:  ${{ secrets.PASSWD }}
+
+          # 推送方式一：Server酱（旧版/新版 Turbo 均可）
+          SCKEY:   ${{ secrets.SCKEY }}
+
+          # 推送方式二：WxPusher（目前最稳定推荐）
+          WXPUSHER_APPTOKEN:  ${{ secrets.WP_APP_TOKEN }}     # 注意：你的原名是 WP_APP_TOKEN
+          WXPUSHER_UID:       ${{ secrets.WXPUSHER_UID }}
+
+          # 控制推送方式（可选，不填默认 both）
+          # 可选值：serverchan / wxpusher / both
+          PUSH_METHOD: ${{ secrets.PUSH_METHOD || 'both' }}
+
+        run: python3 ./main.py
+
+      - name: Show timestamp (debug)
+        if: always()
+        run: date -u +"%Y-%m-%d %H:%M:%S UTC"
