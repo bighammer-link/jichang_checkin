@@ -40,5 +40,6 @@ jobs:
           EMAIL: ${{ secrets.EMAIL }}
           PASSWD: ${{ secrets.PASSWD }}
           CONFIG: ${{ secrets.CONFIG }}
+          COOKIE: ${{ secrets.COOKIE }}
         run: |
           python3 ./main.py

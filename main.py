@@ -8,10 +8,25 @@ import requests
 # ── Environment variables ─────────────────────────────────────────────────────
 url = os.environ.get('URL', '').rstrip('/')
 config = os.environ.get('CONFIG', '')
+cookie_str = os.environ.get('COOKIE', '')
 SCKEY = os.environ.get('SCKEY', '')
 
 login_url = '{}/auth/login'.format(url)
 check_url = '{}/user/checkin'.format(url)
+
+
+# ── Cookie parsing ───────────────────────────────────────────────────────────
+
+def parse_cookie_string(raw: str) -> dict[str, str]:
+    """Parse a 'key1=val1; key2=val2; ...' cookie string into a dict."""
+    result: dict[str, str] = {}
+    for pair in raw.split(';'):
+        pair = pair.strip()
+        if not pair or '=' not in pair:
+            continue
+        k, v = pair.split('=', 1)
+        result[k.strip()] = v.strip()
+    return result
 
 # ── Retry settings ────────────────────────────────────────────────────────────
 MAX_RETRIES = 3
@@ -84,10 +99,50 @@ def parse_json(phase: str, text: str) -> dict | None:
 
 # ── Core sign-in logic ────────────────────────────────────────────────────────
 
+def sign_with_cookie(order: int, cookie_str: str) -> bool:
+    """Sign in using a pre-authenticated cookie string (bypasses login phase).
+
+    Returns True on success, False otherwise.
+    """
+    session = requests.Session()
+    cookie_dict = parse_cookie_string(cookie_str)
+    if not cookie_dict:
+        print('[账号] Cookie 解析为空，跳过')
+        return False
+
+    header = dict(_HEADERS)
+    header['origin'] = url
+    # requests 会自动根据 cookie jar 发 Cookie header；同时保留原始字符串以备万一
+    session.cookies.update(cookie_dict)
+
+    print('=== Cookie 账号 {} 开始签到 ==='.format(order + 1))
+
+    try:
+        resp = post_with_retry(session, '签到', check_url, headers=header)
+    except Exception as exc:
+        print('[签到] 签到请求最终失败: {}'.format(exc))
+        send_notification('机场签到 - 签到失败',
+                          'Cookie 账号 {} 签到网络异常: {}'.format(order + 1, exc))
+        return False
+
+    checkin_data = parse_json('签到', resp.text)
+    if checkin_data is None:
+        send_notification('机场签到 - 签到失败',
+                          'Cookie 账号 {} 签到响应解析失败'.format(order + 1))
+        return False
+
+    checkin_msg = checkin_data.get('msg', '(无消息)')
+    print('[签到] msg={}'.format(checkin_msg))
+    send_notification('机场签到', checkin_msg)
+
+    print('=== Cookie 账号 {} 签到完成 ===\n'.format(order + 1))
+    return True
+
+
 def sign(order: int, user: str, pwd: str) -> bool:
     """Perform login + check-in for one account.
 
-    Returns True on success, False if either phase ultimately fails.
+    Returns True on success, False if either phase ultimately falls.
     """
     session = requests.Session()
     header = dict(_HEADERS)
@@ -143,8 +198,40 @@ if __name__ == '__main__':
     if not url:
         print('[错误] 未设置 URL 环境变量')
         sys.exit(1)
+
+    # ── Mode 1: Cookie-based sign-in (preferred, bypasses Geetest) ─────────
+    if cookie_str:
+        print('[模式] 使用 Cookie 签到（跳过登录）')
+        # 支持多个 Cookie，用换行或 ||| 分隔
+        cookies = [
+            c.strip()
+            for sep in ['|||', '\n']
+            for c in cookie_str.split(sep)
+            if c.strip()
+        ]
+        # 去重（当分隔符只有一种时 split 另一种会产生整段原样）
+        seen: set[str] = set()
+        unique_cookies: list[str] = []
+        for c in cookies:
+            if c not in seen:
+                seen.add(c)
+                unique_cookies.append(c)
+
+        failed = 0
+        for i, ck in enumerate(unique_cookies):
+            if not sign_with_cookie(i, ck):
+                failed += 1
+
+        if failed:
+            print('[结果] {}/{} 个 Cookie 账号签到失败'.format(failed, len(unique_cookies)))
+            sys.exit(1)
+        else:
+            print('[结果] 全部 {} 个 Cookie 账号签到成功'.format(len(unique_cookies)))
+        sys.exit(0)
+
+    # ── Mode 2: Legacy email/password sign-in ───────────────────────────────
     if not config:
-        print('[错误] 未设置 CONFIG 环境变量')
+        print('[错误] 未设置 CONFIG 环境变量（也未设置 COOKIE）')
         sys.exit(1)
 
     # Strip blank lines so that a trailing newline in the secret doesn't break
