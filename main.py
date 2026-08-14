@@ -1,4 +1,5 @@
 import requests, json, os, time
+from urllib.parse import urlparse
 from geeked import Geeked
 
 # 机场的地址
@@ -16,6 +17,29 @@ login_url = '{}/auth/login'.format(url)
 check_url = '{}/user/checkin'.format(url)
 
 MAX_RETRIES = 3
+
+
+def build_login_data(user, pwd, captcha, page_loaded_at):
+        """构造同时兼容新版分阶段登录和旧版登录接口的表单。"""
+        return {
+                'host': urlparse(url).netloc,
+                'phase': 'password',
+                'email': user,
+                'passwd': pwd,
+                'pageLoadedAt': page_loaded_at,
+                'captcha_result[lot_number]': captcha['lot_number'],
+                'captcha_result[captcha_output]': captcha['captcha_output'],
+                'captcha_result[pass_token]': captcha['pass_token'],
+                'captcha_result[gen_time]': captcha['gen_time'],
+        }
+
+
+def login_succeeded(response):
+        """兼容新版 phase 响应和旧版 ret 响应。"""
+        return (
+                response.get('phase') == 'authenticated'
+                or str(response.get('ret')) == '1'
+        )
 
 def solve_captcha():
         """使用 GeekedTest 求解 GeeTest V4 验证码（纯 Python，无需浏览器），支持重试"""
@@ -40,11 +64,18 @@ def sign(order,user,pwd):
         global url,SCKEY
         header = {
         'origin': url,
+        'referer': login_url,
+        'x-requested-with': 'XMLHttpRequest',
         'user-agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36'
         }
         try:
                 print(f'===账号{order}进行登录...===')
                 print(f'账号：{user}')
+
+                # 先访问登录页，建立与浏览器一致的会话，并记录页面加载时间。
+                login_page = session.get(url=login_url, headers=header, timeout=30)
+                login_page.raise_for_status()
+                page_loaded_at = int(time.time() * 1000)
 
                 # 求解 GeeTest V4 验证码
                 captcha = solve_captcha()
@@ -52,23 +83,20 @@ def sign(order,user,pwd):
                         print('验证码求解失败，跳过此账号')
                         return
 
-                data = {
-                'email': user,
-                'passwd': pwd,
-                'captcha_result[lot_number]': captcha['lot_number'],
-                'captcha_result[captcha_output]': captcha['captcha_output'],
-                'captcha_result[pass_token]': captcha['pass_token'],
-                'captcha_result[gen_time]': captcha['gen_time'],
-                }
+                data = build_login_data(user, pwd, captcha, page_loaded_at)
 
-                res = session.post(url=login_url,headers=header,data=data).text
-                print(res)
-                response = json.loads(res)
-                print(response['msg'])
+                login_response = session.post(
+                        url=login_url, headers=header, data=data, timeout=30
+                )
+                login_response.raise_for_status()
+                print(login_response.text)
+                response = login_response.json()
+                message = response.get('msg', '登录接口未返回提示信息')
+                print(message)
 
-                if response.get('ret') != 1:
-                        print(f'登录失败: {response["msg"]}')
-                        content = f'登录失败: {response["msg"]}'
+                if not login_succeeded(response):
+                        print(f'登录失败: {message}')
+                        content = f'登录失败: {message}'
                         if SCKEY != '':
                                 push_url = 'https://sctapi.ftqq.com/{}.send?title=机场签到&desp={}'.format(SCKEY, content)
                                 requests.post(url=push_url)
