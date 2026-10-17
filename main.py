@@ -3,7 +3,6 @@
 import json
 import json
 import os
-import re
 import time
 from urllib.parse import urlsplit
 
@@ -151,7 +150,7 @@ def parse_geetest_response(raw, callback):
         if code is None and isinstance(error, dict):
             code = error.get('code')
         code = str(code) if code is not None else ''
-        code = code if re.fullmatch(r'-?\\d{1,7}', code) else 'unknown'
+        code = code if 1 <= len(code) <= 8 and code.lstrip('-').isdigit() else 'unknown'
         raise GeetestResponseError(f'极验响应缺少 data（status={status}, code={code}）')
     return data
 
