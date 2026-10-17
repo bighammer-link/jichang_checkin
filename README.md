@@ -150,7 +150,7 @@ schedule:
 
 **验证码求解报 `KeyError` / `返回数据缺少字段`**
 
-这是 GeekedTest 求解器处理极验返回数据时出现的字段缺失，**不代表你的 AIRPORTS 或钉钉 Secrets 配置错误**。日志会打印安全的缺失字段名（例如 `lot_number`、`payload` 或 `data`），不输出完整验证码请求响应。不同字段可能对应不同原因：响应内容或验证码协议发生变化、临时服务故障、求解器版本与站点配置不兼容等。首先记录缺失字段，再结合日志和 [GeekedTest](https://github.com/xKiian/GeekedTest) 上游状态判断，勿把实际账号密码或响应令牌贴到 Issue 中。验证码失败时不会尝试绕过验证直接登录。
+这是 GeekedTest 求解器处理极验返回数据时出现的字段缺失，**不代表你的 AIRPORTS 或钉钉 Secrets 配置错误**。新版本针对“极验响应缺少 `data`”会输出经过限制的 `status` 和数字 `code`，例如 `status=fail, code=60100`（仅为示例），同时不会打印完整验证码响应、令牌或敏感字段。如果响应不是有效 JSONP，则提示格式异常。极验官方的 [错误码文档](https://docs.geetest.com/gt4/apirefer/errorcode/web) 解释了 ID、网络及服务拒绝等不同错误原因；可以结合错误码排查。请勿公开实际账号密码或响应令牌。验证码失败时程序不会直接跳过验证去登录。
 
 **没有收到钉钉机器人通知**
 
