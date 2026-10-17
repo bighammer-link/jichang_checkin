@@ -47,6 +47,9 @@ jobs:
           "
           mv temp_geeked/geeked ./geeked
           rm -rf temp_geeked
+      - name: Test configuration and notifications
+        run: python -m unittest discover -s tests -v
+
       - name: Run sign
         env:
           URL: ${{ secrets.URL }}
@@ -54,5 +57,8 @@ jobs:
           EMAIL: ${{ secrets.EMAIL }}
           PASSWD: ${{ secrets.PASSWD }}
           CONFIG: ${{ secrets.CONFIG }}
+          AIRPORTS: ${{ secrets.AIRPORTS }}
+          DINGTALK_WEBHOOK: ${{ secrets.DINGTALK_WEBHOOK }}
+          DINGTALK_SECRET: ${{ secrets.DINGTALK_SECRET }}
         run: |
           python3 ./main.py
