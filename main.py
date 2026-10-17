@@ -7,7 +7,7 @@ url = os.environ.get('URL')
 
 config = os.environ.get('CONFIG')
 # server酱
-SCKEY = os.environ.get('SCKEY')
+SCKEY = os.environ.get('SCKEY') or ''
 
 # GeeTest V4 验证码 ID（从 ikuuu.org 提取）
 CAPTCHA_ID = 'cc96d05ba8b60f9112f76e18526fcb73'
