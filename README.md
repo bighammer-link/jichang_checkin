@@ -1,8 +1,8 @@
 # 通用机场签到 😍
 
-使用 GitHub Actions 定时尝试登录机场网站并签到，获取站点提供的签到流量奖励；可选通过 [Server酱](https://sct.ftqq.com/) 和钉钉自定义机器人（加签鉴权）推送结果；两者可以同时使用。
+使用 GitHub Actions 定时尝试登录机场网站并签到，获取站点提供的流量奖励。支持**单机场多账号**及**多机场多账号**，可选通过 [Server酱](https://sct.ftqq.com/) 和钉钉自定义机器人（加签鉴权）分别推送账号签到结果；两者可以同时使用。
 
-> **兼容性说明**：此项目使用 SSPanel 常见的 `/auth/login` 和 `/user/checkin` 接口，但并不保证所有标注「Powered by SSPanel」的网站都可使用。当前 `main.py` 中的 GeeTest V4 验证码 ID 是针对 `ikuuu.org` 写死的，其他站点若使用不同验证码或登录流程，需要先适配代码。不要仅凭网页底部的 SSPanel 标识判断一定兼容。
+> **兼容性说明**：此项目使用 SSPanel 常见的 `/auth/login` 和 `/user/checkin` 接口，但并不保证所有标注「Powered by SSPanel」的网站都可使用。多机场模式可以为每个机场配置不同的 GeeTest V4 `captcha_id`；未指定时使用针对 `ikuuu.org` 提取的默认 ID。其他站点如果采用不同验证码或登录流程，仍需要适配代码。
 
 ## 部署到自己的 Fork
 
@@ -22,13 +22,18 @@
 
 | Secret 名称 | 是否必填 | 填写说明 |
 | --- | --- | --- |
-| `URL` | **必填** | 机场站点根地址，例如 `https://example.com`；必须包含 `https://`（或站点实际使用的 `http://`），**末尾不要添加 `/`**。不要填登录页面的 `/auth/login` 地址。 |
-| `CONFIG` | **必填** | 机场登录账号和密码，使用下面所示的**多行格式**：第一行邮箱、第二行密码；多账号时继续按「邮箱、密码」成对排列。 |
+| `URL` | 单机场模式必填 | 机场站点根地址，例如 `https://example.com`；不要填 `/auth/login` 登录接口。程序会自动去除末尾的 `/`。使用 `AIRPORTS` 时不需要。 |
+| `CONFIG` | 单机场模式必填 | 机场登录账号和密码，按下方**多行格式**配置。使用 `AIRPORTS` 时不需要。 |
+| `AIRPORTS` | 多机场模式必填 | **一个 JSON 数组**，保存每个机场的名称、根地址、独立验证码 ID 和账号列表。设置后优先使用 `AIRPORTS`，旧的 `URL` + `CONFIG` 不会重复执行。见下方示例。 |
 | `SCKEY` | 可选 | [Server酱](https://sct.ftqq.com/) 的 SendKey，用于推送签到结果；**不需要推送就不创建这个 Secret**。 |
 | `DINGTALK_WEBHOOK` | 可选 | 钉钉群自定义机器人的完整 Webhook，例如 `https://oapi.dingtalk.com/robot/send?access_token=你的令牌`。与下方 `DINGTALK_SECRET` **成对配置**。 |
 | `DINGTALK_SECRET` | 可选 | 钉钉机器人的“加签”密钥，通常以 `SEC` 开头。与上方 `DINGTALK_WEBHOOK` **成对配置**。 |
 
-#### `CONFIG` 的正确写法
+#### 方式一：单机场（`URL` + `CONFIG`）
+
+适用于一个机场、一个或多个账号。创建两个 Secrets：`URL`（例如 `https://example.com`）以及 `CONFIG`。
+
+##### `CONFIG` 的正确写法
 
 **单账号示例**（整个文本填入一个名称为 `CONFIG` 的 Secret）：
 
@@ -51,8 +56,45 @@ bob-password-here
 - `CONFIG` 是**一个多行 Secret**，不是每个账号创建一个 Secret；每两行代表一个账号。
 - 不要加 `CONFIG=`、引号、逗号、JSON 格式或空白分隔行；行数必须为偶数。
 - `URL` 和 `CONFIG` 是两个**独立的 Secret**。不要把 `URL` 写进 `CONFIG`。
+- 如果同时设置了 `AIRPORTS` 和 `URL` / `CONFIG`，**只按 `AIRPORTS` 执行**；想恢复旧模式，删除或清空 `AIRPORTS`。
 - 工作流里虽然还传入了 `EMAIL`、`PASSWD`，但当前 `main.py` **不读取它们**，不需要配置这两项。
 - Secrets 不会显示已保存的明文值；如果填错，可在同一页面更新。**不要把真实账号、密码或 SendKey 提交进 README、代码或 workflow 文件。**
+
+#### 方式二：多机场多账号（`AIRPORTS`）
+
+只需额外创建**一个**名称为 `AIRPORTS` 的 GitHub Actions Secret，把下面整个 **JSON 数组**作为 Secret 值填入（用自己的机场地址、账号密码和验证码 ID 替换示例值）。
+
+```json
+[
+  {
+    "name": "机场A",
+    "url": "https://airport-a.example.com",
+    "captcha_id": "此处填写机场A的GeeTestV4验证码ID",
+    "accounts": [
+      {"email": "alice@example.com", "password": "alice-password"},
+      {"email": "bob@example.com", "password": "bob-password"}
+    ]
+  },
+  {
+    "name": "机场B",
+    "url": "https://airport-b.example.com",
+    "captcha_id": "此处填写机场B的GeeTestV4验证码ID",
+    "accounts": [
+      {"email": "charlie@example.com", "password": "charlie-password"}
+    ]
+  }
+]
+```
+
+上面的示例表示：**机场 A 有 2 个账号，机场 B 有 1 个账号**。实际机场数和账号数不限（受 GitHub Actions 运行时间和 Secret 大小限制）。
+
+- `name`：机场显示名称，用于日志和钉钉、Server酱通知，可省略。
+- `url`：**必填**。机场网站根地址，使用真实的 `https://...` 地址。
+- `accounts`：**必填**。账号对象数组，每项必须包含 `email` 与 `password`。
+- `captcha_id`：可选的 GeeTest V4 验证码 ID。**建议每个机场按自身情况填写**；省略时会使用代码中针对 `ikuuu.org` 的默认 ID，其他站点可能因 ID 不匹配而失败。并非所有机场都使用 GeeTest V4。
+- 如果某机场的地址无效、没有有效账号，程序会记录提示并跳过该机场；单个账号签到失败不会阻断后续账号或其他机场。
+- 如 `AIRPORTS` 整体不是合法 JSON，或没有任何有效账号，任务会因配置错误退出。请确认使用**双引号**、逗号和正确的括号，不要加入 JSON 注释。
+- `AIRPORTS` 中包含**真实账号密码**，务必保存为 GitHub **Secret**，不要放在仓库文件、提交记录或公开聊天中。钉钉推送会显示机场名称和脱敏账号，机器人仍使用同一对 `DINGTALK_WEBHOOK` / `DINGTALK_SECRET`。
 
 #### 配置钉钉机器人通知（加签鉴权）
 
@@ -94,21 +136,21 @@ schedule:
 
 确认进入的是自己的 Fork、Actions 已启用、查看的是 `main` 分支，并选择已有的 **Common airport Checkin** 工作流，而不是创建新工作流。
 
-**提示“配置文件格式错误”**
+**提示“配置文件格式错误”或“AIRPORTS 必须是合法的 JSON 数组”**
 
-检查 `CONFIG` 是否按「邮箱一行、密码一行」成对填写，是否有插入的空白行。不要只填写一行，也不要把 `URL` 放进 `CONFIG`。
+旧模式请检查 `CONFIG` 是否按「邮箱一行、密码一行」成对填写，不要只填写一行或留空行。多机场模式请用 JSON 校验工具检查 `AIRPORTS` 格式，并确保数组包含有效的 `url` 和 `accounts`。
 
 **登录请求失败 / 地址错误**
 
-检查 `URL` 是否指向正确的机场站点根地址、不含末尾的 `/`，以及该站点是否真的使用 `/auth/login` 和 `/user/checkin` 接口。
+检查旧模式的 `URL` 或多机场模式各项 `url` 是否指向正确的机场站点根地址，以及该站点是否真的使用 `/auth/login` 和 `/user/checkin` 接口。
 
 **验证码求解失败 / 登录返回验证码错误**
 
-项目使用 GeeTest V4，且代码中 `CAPTCHA_ID` 当前固定为 `ikuuu.org` 的站点参数。其他机场可能采用不同的验证码 ID 或流程，不能直接复用，需要根据目标站点适配。工作流还会从第三方 [GeekedTest](https://github.com/xKiian/GeekedTest) 仓库获取求解器，第三方依赖变化也可能导致运行异常。
+项目使用 GeeTest V4，默认 `CAPTCHA_ID` 针对 `ikuuu.org`。多机场模式可为每个机场单独设置 `captcha_id`，但其他站点若使用不同验证码方案或登录流程，则还需要适配代码。工作流会从第三方 [GeekedTest](https://github.com/xKiian/GeekedTest) 仓库获取求解器，第三方依赖变化也可能导致运行异常。
 
 **没有收到钉钉机器人通知**
 
-检查两个 Secrets 是否均已配置，机器人是否已经完成创建，Webhook 是否包含 `access_token`。检查 `Run sign` 的钉钉通知错误码；如果提示 `invalid signature`，重新复制加签密钥；如果提示 `invalid timestamp`，确认运行环境时间正确。没有真正进入登录或签到流程时不会发通知。
+检查两个 Secrets 是否均已配置，机器人是否已经完成创建，Webhook 是否包含 `access_token`。检查 `Run sign` 的钉钉通知错误码；如果提示 `invalid signature`，重新复制加签密钥；如果提示 `invalid timestamp`，确认运行环境时间正确。没有真正进入登录或签到流程时不会发通知。多机场运行时，钉钉每个账号单独推送，消息中会附带机场名称。
 
 **没有收到 Server酱推送**
 
@@ -116,4 +158,4 @@ schedule:
 
 **需要分享运行日志**
 
-日志可能包含账号邮箱、站点返回的数据或其他敏感信息，公开分享前请先打码；**不要分享 Secret 的真实值，包括钉钉 Webhook 和加签密钥**。
+日志可能包含账号邮箱、站点返回的数据或其他敏感信息，公开分享前请先打码；**不要分享 Secret 的真实值，包括 `AIRPORTS` 内的账号密码、钉钉 Webhook 和加签密钥**。
