@@ -115,6 +115,30 @@ class MultiAirportRuntimeTests(unittest.TestCase):
         self.assertEqual(checkin.call_args_list[2].kwargs['airport_name'], '机场 B')
         notify.assert_called_once()
 
+    def test_run_all_counts_failures_but_attempts_all_accounts(self):
+        data = json.dumps([
+            {'name': '机场 A', 'url': 'https://a.example.com', 'accounts': [
+                {'email': 'a@example.com', 'password': '1'},
+                {'email': 'b@example.com', 'password': '2'},
+            ]},
+        ])
+        with patch.object(main, 'sign', side_effect=[False, True]) as checkin:
+            failed = main.run_all({'AIRPORTS': data})
+        self.assertEqual(checkin.call_count, 2)
+        self.assertEqual(failed, 1)
+
+    def test_missing_captcha_response_key_is_logged_without_raw_payload(self):
+        solver = Mock()
+        solver.solve.side_effect = KeyError('lot_number')
+        with patch.object(main, 'Geeked', return_value=solver), \
+             patch.object(main.time, 'sleep'), \
+             patch('builtins.print') as printer:
+            result = main.solve_captcha('site-id')
+        self.assertIsNone(result)
+        lines = ' '.join(' '.join(map(str, call.args)) for call in printer.call_args_list)
+        self.assertIn('返回数据缺少字段 lot_number', lines)
+        self.assertEqual(solver.solve.call_count, 3)
+
     def test_site_specific_captcha_and_notification_label(self):
         session = Mock()
         session.post.side_effect = [
