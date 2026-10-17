@@ -1,7 +1,9 @@
 """SSPanel check-in for one or more airports, with optional notifications."""
 
 import json
+import json
 import os
+import re
 import time
 from urllib.parse import urlsplit
 
@@ -119,15 +121,60 @@ def load_airports(environ=None):
     }]
 
 
+class GeetestResponseError(Exception):
+    """Safe, limited diagnostics for unexpected captcha-service responses."""
+
+
+def parse_geetest_response(raw, callback):
+    """Decode JSONP without logging a raw response or any verification tokens."""
+    if not isinstance(raw, str):
+        raise GeetestResponseError('返回内容不是文本')
+    wrapped = raw.strip().rstrip(';').strip()
+    prefix = f'{callback}('
+    if not wrapped.startswith(prefix) or not wrapped.endswith(')'):
+        raise GeetestResponseError('返回内容不是预期 JSONP 格式，可能是网络或服务端拒绝')
+    try:
+        payload = json.loads(wrapped[len(prefix):-1])
+    except ValueError:
+        raise GeetestResponseError('返回内容不是有效 JSON') from None
+    if not isinstance(payload, dict):
+        raise GeetestResponseError('返回内容结构不是对象')
+
+    data = payload.get('data')
+    if not isinstance(data, dict):
+        # Never print raw response, msg, challenge, payload or tokens. Only safe
+        # protocol status and numerical error codes are allowed into logs.
+        status = payload.get('status')
+        status = status if status in ('success', 'fail', 'error') else 'unknown'
+        code = payload.get('code')
+        error = payload.get('error')
+        if code is None and isinstance(error, dict):
+            code = error.get('code')
+        code = str(code) if code is not None else ''
+        code = code if re.fullmatch(r'-?\\d{1,7}', code) else 'unknown'
+        raise GeetestResponseError(f'极验响应缺少 data（status={status}, code={code}）')
+    return data
+
+
 def solve_captcha(captcha_id=None):
     """尝试求解 GeeTest V4 验证码，失败则返回 None。"""
     site_captcha_id = captcha_id or CAPTCHA_ID
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             print(f'验证码求解尝试 {attempt}/{MAX_RETRIES}...')
-            captcha = Geeked(site_captcha_id, 'ai').solve()
+            solver = Geeked(site_captcha_id, 'ai')
+            # GeekedTest's upstream format_response currently assumes every
+            # response has a data key. Decode errors without leaking raw values.
+            solver.format_response = lambda response: parse_geetest_response(
+                response, solver.callback
+            )
+            captcha = solver.solve()
             print('验证码求解成功')
             return captcha
+        except GeetestResponseError as exc:
+            print(f'验证码求解失败 (尝试 {attempt}/{MAX_RETRIES}): {exc}')
+            if attempt < MAX_RETRIES:
+                time.sleep(2)
         except KeyError as exc:
             # Only report expected protocol field names; never log raw responses or tokens.
             safe_fields = {'data', 'lot_number', 'payload', 'process_token', 'pow_detail',
