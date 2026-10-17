@@ -1,6 +1,6 @@
 # 通用机场签到 😍
 
-使用 GitHub Actions 定时尝试登录机场网站并签到，获取站点提供的签到流量奖励；可选通过 [Server酱](https://sct.ftqq.com/) 推送结果。
+使用 GitHub Actions 定时尝试登录机场网站并签到，获取站点提供的签到流量奖励；可选通过 [Server酱](https://sct.ftqq.com/) 和钉钉自定义机器人（加签鉴权）推送结果；两者可以同时使用。
 
 > **兼容性说明**：此项目使用 SSPanel 常见的 `/auth/login` 和 `/user/checkin` 接口，但并不保证所有标注「Powered by SSPanel」的网站都可使用。当前 `main.py` 中的 GeeTest V4 验证码 ID 是针对 `ikuuu.org` 写死的，其他站点若使用不同验证码或登录流程，需要先适配代码。不要仅凭网页底部的 SSPanel 标识判断一定兼容。
 
@@ -25,6 +25,8 @@
 | `URL` | **必填** | 机场站点根地址，例如 `https://example.com`；必须包含 `https://`（或站点实际使用的 `http://`），**末尾不要添加 `/`**。不要填登录页面的 `/auth/login` 地址。 |
 | `CONFIG` | **必填** | 机场登录账号和密码，使用下面所示的**多行格式**：第一行邮箱、第二行密码；多账号时继续按「邮箱、密码」成对排列。 |
 | `SCKEY` | 可选 | [Server酱](https://sct.ftqq.com/) 的 SendKey，用于推送签到结果；**不需要推送就不创建这个 Secret**。 |
+| `DINGTALK_WEBHOOK` | 可选 | 钉钉群自定义机器人的完整 Webhook，例如 `https://oapi.dingtalk.com/robot/send?access_token=你的令牌`。与下方 `DINGTALK_SECRET` **成对配置**。 |
+| `DINGTALK_SECRET` | 可选 | 钉钉机器人的“加签”密钥，通常以 `SEC` 开头。与上方 `DINGTALK_WEBHOOK` **成对配置**。 |
 
 #### `CONFIG` 的正确写法
 
@@ -52,6 +54,20 @@ bob-password-here
 - 工作流里虽然还传入了 `EMAIL`、`PASSWD`，但当前 `main.py` **不读取它们**，不需要配置这两项。
 - Secrets 不会显示已保存的明文值；如果填错，可在同一页面更新。**不要把真实账号、密码或 SendKey 提交进 README、代码或 workflow 文件。**
 
+#### 配置钉钉机器人通知（加签鉴权）
+
+1. 在需要接收签到通知的钉钉群中，进入 **群设置 → 机器人 / 智能群助手 → 添加自定义机器人**。
+2. 填写机器人名称（例如“机场签到”），选择 **安全设置 → 加签**，复制 `SEC` 开头的密钥。无需额外设置关键词或固定 IP 白名单。
+3. 勾选服务条款，点击 **完成**，再复制创建完成后钉钉提供的**完整 Webhook** 地址。
+4. 在自己 Fork 的 GitHub **Settings → Secrets and variables → Actions → New repository secret** 中，分别添加 `DINGTALK_WEBHOOK` 和 `DINGTALK_SECRET`，务必与钉钉页面的值一致。
+5. 按下面的步骤手动运行一次工作流，在 **Run sign** 日志中查看 `钉钉通知发送成功`，并检查钉钉群是否收到通知。
+
+加签方式由程序自动生成毫秒级 `timestamp`、使用 `HMAC-SHA256` 和 Base64 计算签名，再将 `sign` URL 编码后附加到 Webhook。**GitHub Secret 中填写原始 Webhook 即可，无需手动拼接 `timestamp` 或 `sign`**。详细机制见 [钉钉自定义机器人文档](https://open.dingtalk.com/document/group/custom-robot-access)。
+
+- `DINGTALK_WEBHOOK` 和 `DINGTALK_SECRET` **必须同时配置**才能启用钉钉通知；未配置时不影响签到。单独配置其中一个，日志会提示缺少另一项。
+- 支持与 `SCKEY` 同时使用；通知包含成功、登录失败、验证码失败、签到失败或异常等结果。为保护隐私，通知中的账号邮箱会做简单脱敏。
+- Webhook 中的 `access_token` 和 `SEC` 加签密钥都属于敏感信息，**不要放进公开仓库、Issues、PR、截图或聊天**。如不慎暴露，请在钉钉重置密钥并更新 GitHub Secrets。
+- 代码只接受钉钉官方 `https://oapi.dingtalk.com/robot/send` 格式的 Webhook，不会向任意第三方 URL 发送密钥。
 ### 3. 手动运行一次
 
 1. 在自己的 Fork 中进入 **Actions**。
@@ -90,10 +106,14 @@ schedule:
 
 项目使用 GeeTest V4，且代码中 `CAPTCHA_ID` 当前固定为 `ikuuu.org` 的站点参数。其他机场可能采用不同的验证码 ID 或流程，不能直接复用，需要根据目标站点适配。工作流还会从第三方 [GeekedTest](https://github.com/xKiian/GeekedTest) 仓库获取求解器，第三方依赖变化也可能导致运行异常。
 
+**没有收到钉钉机器人通知**
+
+检查两个 Secrets 是否均已配置，机器人是否已经完成创建，Webhook 是否包含 `access_token`。检查 `Run sign` 的钉钉通知错误码；如果提示 `invalid signature`，重新复制加签密钥；如果提示 `invalid timestamp`，确认运行环境时间正确。没有真正进入登录或签到流程时不会发通知。
+
 **没有收到 Server酱推送**
 
 确认是否创建了 `SCKEY` 且值正确；不创建 `SCKEY` 时脚本仍会尝试签到，只是不推送。
 
 **需要分享运行日志**
 
-日志可能包含账号邮箱、站点返回的数据或其他敏感信息，公开分享前请先打码；**不要分享 Secret 的真实值**。
+日志可能包含账号邮箱、站点返回的数据或其他敏感信息，公开分享前请先打码；**不要分享 Secret 的真实值，包括钉钉 Webhook 和加签密钥**。
