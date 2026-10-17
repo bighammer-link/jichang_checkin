@@ -128,6 +128,14 @@ def solve_captcha(captcha_id=None):
             captcha = Geeked(site_captcha_id, 'ai').solve()
             print('验证码求解成功')
             return captcha
+        except KeyError as exc:
+            # Only report expected protocol field names; never log raw responses or tokens.
+            safe_fields = {'data', 'lot_number', 'payload', 'process_token', 'pow_detail',
+                           'pt', 'hashfunc', 'version', 'bits', 'datetime', 'seccode'}
+            field = exc.args[0] if exc.args and exc.args[0] in safe_fields else '未知字段'
+            print(f'验证码求解失败 (尝试 {attempt}/{MAX_RETRIES}): 返回数据缺少字段 {field}')
+            if attempt < MAX_RETRIES:
+                time.sleep(2)
         except Exception as exc:
             print(f'验证码求解失败 (尝试 {attempt}/{MAX_RETRIES}): {type(exc).__name__}')
             if attempt < MAX_RETRIES:
@@ -159,7 +167,7 @@ def sign(order, user, pwd, airport_url=None, captcha_id=None, airport_name='默�
         if captcha is None:
             print('验证码求解失败，跳过此账号')
             notify('机场签到失败', f'{prefix}\n验证码求解失败，跳过此账号')
-            return
+            return False
 
         data = {
             'email': user,
@@ -176,7 +184,7 @@ def sign(order, user, pwd, airport_url=None, captcha_id=None, airport_name='默�
         print(f'登录结果：{login_message}')
         if response.get('ret') != 1:
             notify('机场签到失败', f'{prefix}\n登录失败：{login_message}')
-            return
+            return False
 
         result = session.post(
             f'{site_url}/user/checkin', headers=headers, timeout=REQUEST_TIMEOUT
@@ -185,13 +193,17 @@ def sign(order, user, pwd, airport_url=None, captcha_id=None, airport_name='默�
         print(f'签到结果：{message}')
         if result.get('ret') == 1:
             notify('机场签到成功', f'{prefix}\n{message}')
+            return True
         elif result.get('ret') == 0:
             notify('机场签到失败', f'{prefix}\n{message}')
+            return False
         else:
             notify('机场签到结果', f'{prefix}\n{message}')
+            return False
     except Exception as exc:
         print(f'签到异常：{type(exc).__name__}，请检查网络或 GitHub Actions 日志')
         notify('机场签到失败', f'{prefix}\n签到异常，请查看 GitHub Actions 日志')
+        return False
     finally:
         session.close()
         print(f'=== {airport_name} / {account} 签到结束 ===\n')
@@ -202,22 +214,30 @@ def run_all(environ=None):
     airports = load_airports(environ)
     total = sum(len(airport['accounts']) for airport in airports)
     print(f'已载入 {len(airports)} 个机场、{total} 个账号')
+    failed = 0
     for airport in airports:
         for index, (email, password) in enumerate(airport['accounts']):
             try:
-                sign(
+                result = sign(
                     index, email, password,
                     airport_url=airport['url'],
                     captcha_id=airport['captcha_id'],
                     airport_name=airport['name'],
                 )
+                if result is False:
+                    failed += 1
             except Exception as exc:
+                failed += 1
                 print(f'{airport["name"]}：第 {index + 1} 个账号出现未处理的异常 {type(exc).__name__}')
                 notify('机场签到失败', f'机场：{airport["name"]}\n账号 {index + 1}\n签到异常，请查看 GitHub Actions 日志')
+    print(f'签到任务结束：总计 {total} 个账号，失败 {failed} 个')
+    return failed
 
 
 if __name__ == '__main__':
     try:
-        run_all()
+        failed_count = run_all()
+        if failed_count:
+            raise SystemExit(1)
     except ValueError as exc:
         raise SystemExit(f'配置错误：{exc}') from None
